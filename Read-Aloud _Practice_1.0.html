@@ -1,0 +1,680 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>RA Read-Aloud Practice</title>
+<style>
+  :root{
+    --bg:#f4f6fb;
+    --panel:#ffffff;
+    --accent:#1f6feb; /* Green for Start */
+    --accent-dark:#155fcc;
+    --pause-blue:#0288d1; /* Blue for Pause */
+    --muted:#6b7280;
+    --highlight:#d32f2f; /* red for text highlight */
+    --btn-radius:10px;
+  }
+  body{
+    margin:0;
+    background:var(--bg);
+    font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+    color:#0b1220;
+  }
+  .wrap{max-width:900px;margin:32px auto;padding:24px;}
+  header{display:flex;align-items:center;justify-content:center;margin-bottom:16px;}
+  h1{font-size:24px;margin:0;}
+  .sub{color:var(--muted);font-size:14px;text-align:center;margin-top:8px;}
+  .controls, .panel{background:var(--panel);border-radius:12px;padding:16px;box-shadow:0 8px 22px rgba(12,18,26,0.06);}
+  .top-row{display:flex;gap:16px;align-items:center;justify-content:center;}
+  select{font-size:14px;}
+  .right-actions{margin-left:auto;display:flex;gap:12px;align-items:center;}
+  .main{display:flex;gap:16px;margin-top:20px;justify-content:center;}
+  .left{flex:1;}
+  .text-panel{padding:24px;font-size:24px;line-height:2.0;border-radius:8px;min-height:240px;overflow-wrap:break-word;position:relative;}
+  .chunk {display:inline;white-space:normal;}
+  .word {display:inline-block;white-space:pre; transition: color 0.08s linear;}
+  .word.default { color: #111; }
+  .word.colored { color: var(--highlight); }
+  .chunk[data-state="current"] { }
+  .buttons {display:flex;gap:12px;align-items:center;justify-content:center;margin-top:16px;}
+  button.primary {
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    padding:10px 16px;
+    border-radius:var(--btn-radius);
+    font-size:15px;
+    cursor:pointer;
+    transition:transform .12s ease, background .12s ease, box-shadow .12s ease;
+    box-shadow: 0 6px 14px rgba(31,111,235,0.14);
+  }
+  button.primary:hover {
+    transform:translateY(-3px);
+    background:var(--accent-dark);
+    box-shadow: 0 10px 20px rgba(31,111,235,0.18);
+  }
+  button.primary.pause {
+    background:var(--pause-blue);
+  }
+  button.primary.pause:hover {
+    background:var(--pause-blue);
+    box-shadow: 0 10px 20px rgba(2,136,209,0.18);
+  }
+  button.secondary {
+    background:#fff;
+    color:#0b1220;
+    border:1px solid #e6e9ef;
+    padding:10px 16px;
+    border-radius:10px;
+    font-size:15px;
+    cursor:pointer;
+    transition:transform .12s ease, background .12s ease, box-shadow .12s ease;
+  }
+  button.secondary:hover {
+    transform:translateY(-2px);
+    box-shadow: 0 6px 12px rgba(2,6,23,0.06);
+  }
+  .small{font-size:14px;color:var(--muted);}
+  .voiceselect{width:100%;max-width:200px;}
+  .status{font-size:14px;color:var(--muted);margin-top:12px;text-align:center;}
+  footer{margin-top:24px;font-size:14px;color:var(--muted);text-align:center;}
+  /* Fullscreen styles */
+  .fullscreen .wrap { max-width: 100%; margin: 0; padding: 32px; }
+  @media (max-width:980px){
+    .main{flex-direction:column;}
+    .text-panel{font-size:20px;min-height:200px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>RA Read-Aloud Practice</h1>
+      <div class="sub">A tool for practicing RA read-aloud anytime, anywhere</div>
+    </div>
+  </header>
+
+  <div class="controls top-row">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <label style="display:flex;flex-direction:column;">
+        <span class="small">Select question (disabled in Random)</span>
+        <select id="selectQ" style="min-width:420px;padding:8px;border-radius:8px;border:1px solid #e6e9ef;"></select>
+      </label>
+      <label style="display:flex;flex-direction:column;">
+        <span class="small">Voice</span>
+        <select id="voiceSelect" class="voiceselect" style="padding:8px;border-radius:8px;border:1px solid #e6e9ef;"></select>
+      </label>
+    </div>
+    <div class="right-actions">
+      <button class="secondary" id="modeToggleBtn">Custom Mode</button>
+      <button class="secondary" id="fullscreenBtn">Enter Full Screen</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="left">
+      <div class="panel text-panel" id="textPanel" aria-live="polite">
+        <div id="paraMeta" class="small" style="margin-bottom:12px;">Select a question and press Start</div>
+        <div id="paraContent"></div>
+      </div>
+      <div class="buttons">
+        <button class="secondary" id="prevBtn">◀ Previous</button>
+        <button class="primary" id="startPauseBtn">▶ Start</button>
+        <button class="secondary" id="nextBtn">Next ▶</button>
+      </div>
+      <div class="status" id="status">Status: idle</div>
+    </div>
+  </div>
+
+  <footer>RA Read-Aloud Practice — © 2025 Stone Zhao</footer>
+</div>
+
+<script>
+/* ========== PASSES: 40 passages (already segmented with / markers where you provided) ========== */
+const passages = [
+{ id:4, title:"Yellow", text:
+`Yellow is considered as the most optimistic color. Yet surprisingly, people lose their tempers more often in yellow rooms / and babies cry more in them. The reason may be that yellow is the hardest color / for eyes to take in. So it can be overpowering if overused.`},
+{ id:10, title:"Alphabet", text:
+`The problem begins with the alphabet itself. Building a spelling system for English / using letters that come from Latin — despite the two languages not sharing exactly the same set of sounds — is like building a playroom / using an IKEA office set.`},
+{ id:17, title:"Cat's Paws", text:
+`In the photo, the wild cat's huge paws are clamped / onto the side of the white safari Jeep / in which Chappell was a passenger. Almost as tall as the Jeep on her hind legs, she appears to be forcing her muzzle / into the back window.`},
+{ id:26, title:"Yellow", text:
+`Cheerful sunny yellow is an attention getter. While it is considered an optimistic color, people lose their tempers more often in yellow rooms, and babies will cry more. It is the most difficult color / for the eye to take in, so it can be overpowering if overused. Yellow enhances concentration, hence its use for legal pads. It also speeds metabolism.`},
+{ id:32, title:"War on Women", text:
+`While the Republican field is packed with male candidates, so far, some of the sharpest Clinton critics have come from women. Democrats successfully campaigned on an alleged GOP perpetrated "war on women" in 2012, but faltered in 2014 / when they tried the same tactic. With Hillary Clinton as the likely Democratic nominee, the fight for women voters will be a central part / of the 2016 campaign.`},
+{ id:51, title:"Classic Adaption", text:
+`A recent trend in the entertainment world is to adapt classic works of literature / for either TV or movies. One argument is that this is to everyone's benefit, as it introduces people to works / they might otherwise never have, but is rarely done successfully.`},
+{ id:67, title:"Market Research", text:
+`Market research is a vital part / of the planning of any business. However experienced you or your staff may be in a particular field, if you are thinking of introducing a service to new area, it is important to find out / what the local population thinks about it first.`},
+{ id:110, title:"Learning Method", text:
+`There is no single method of learning / that guarantees success. How we learn that depends on many different factors. And what works best for you / will not necessarily be the same as the approach used for the other students / even they study the same course. We are all unique as learners, although some patterns emerge from any groups of students.`},
+{ id:117, title:"Rural Population", text:
+`Thus, a country might possess a sizeable rural population, but have an economic system / in which the interests of the voters were predominantly related to their incomes, not to their occupations or location; and in such a country the political system would be unlikely / to include an important agrarian party.`},
+{ id:136, title:"Productive Capacity", text:
+`The core of the problem was the immense disparity / between the country’s productive capacity / and the ability of people to consume. Great innovations in productive techniques during and after the war raised the output of industry / beyond the purchasing capacity of U.S. farmers / and wage earners.`},
+{ id:145, title:"Population Growth", text:
+`How quickly is the world's population growing? In the United States and other developed countries, the current growth rate is very low. In most developing countries, the human population is growing at a rate / of nearly 3 people per second. Because of this bustling growth rate, the human population is well on its way / to reaching 9 billion within lifetime.`},
+{ id:250, title:"Girls v.s. Boys", text:
+`Teenage girls are continuing to outperform boys in English / while the gender gap in achievements in math and science has almost disappeared. The figures show that last year 80% of 14-year-old girls reached at least the expected level 5 in English, compared with 65% of boys. But in math, the girls are just 1% ahead of boys, while in science the difference is 2%.`},
+{ id:252, title:"Difficult Conversations", text:
+`Surprisingly, despite what appear to be infinite variations, all difficult conversations share a common structure. When you’re caught up in the details and anxiety / of a particularly difficult conversation, this structure is hard to see. But understanding that structure is essential / to improve how you handle your most challenging conversations.`},
+{ id:269, title:"Language Appearance", text:
+`It seems that language appeared from nowhere / since no other species has anything resembling human language. However, other animals do possess basic systems / for perceiving and producing sounds / that enable them to communicate. These systems may have been in place / before the appearance of language.`},
+{ id:288, title:"Fast Food", text:
+`Hundreds of millions of American people eat fast food every day / without giving it too much thought, unaware of the subtle and not so subtle ramifications / of their purchases. They just grab their tray off the counter, find a table, take a seat, unwrap the paper, and dig in. The whole experience is transitory / and soon forgotten.`},
+{ id:302, title:"Elephant", text:
+`The elephant is the largest living land mammal. During evolution, its skeleton has greatly altered from the usual mammal, designed for two main reasons. One is to cope with the great weight of huge grinding cheek teeth / and elongated tusk, making the skull particularly massive. The other is to support the enormous bulk / of such a huge body.`},
+{ id:316, title:"Only Family", text:
+`Imagine living all your life / as the only family on your street. Then, one morning, you open the front door / and discover houses all around you. You see neighbors tending their gardens / and children walking to school. Where did all the people come from? What if the answer turned out to be / that they had always been there — you just hadn't seen them.`},
+{ id:326, title:"Father (B)", text:
+`Every morning, no matter how late he had been up, my father rose at 5:30, went to his study, wrote for a couple of hours, made us all breakfast, read the paper with my mother, and then went back to work for the rest of the morning. Many years passed before I realized / that he did this by choice, for a living, and that he was not unemployed or mentally ill.`},
+{ id:338, title:"Parent Teacher Conferences", text:
+`Schools host parent teacher conferences four times a year / and it is important for families to attend. This is your chance to meet with teachers / and ask questions about your child's progress. It can be helpful to write down questions / ahead of time.`},
+{ id:375, title:"Microscopic Invader", text:
+`We all know about bacteria, viruses / and microscopic protozoa. We can watch the way / that these tiny agents move into our bodies / and damage our organs. We have a growing understanding / of how our body mounts defensive strategies / that fight off these invaders, and have built some clever chemical / that can help mount an assault on these bio-villains.`},
+{ id:376, title:"Market Research", text:
+`There are two main types of market research. Quantitative research involves collecting a lot of information / by using techniques such as questionnaires / and other forms of survey. Qualitative research involves working with smaller samples of consumers, often asking them to discuss products and services / while researchers take notes about what they have to say.`},
+{ id:463, title:"Source of Funding", text:
+`A study found that the research funded by the soft drinks industry / had different results from research funded by other sources / and went on to suggest that they may have been biased / by the research itself. The whole point of the scientific methods / is to ensure the research results are not influenced / by the source of funding.`},
+{ id:472, title:"Selective History", text:
+`History is selective. What history books tell us about the past / is not everything that happened, but what historians have selected. They cannot put in everything: choices have to be made. Choices must similarly be made / about which aspects of the past should be formally taught / to the next generation / in the shape of school history lessons.`},
+{ id:498, title:"Bond Funds", text:
+`Most bond funds have credit risk, which is the risk that companies or other issuers whose bonds are owned by the fund / may fail to pay their debts, including the debt owed to the holder of their bonds. Some funds have little credit risk, such as those that invest in insured bonds / or U.S. Treasury bonds. But be careful: nearly all bond funds have interest rate risk, which means that the market value of the bonds they hold / will go down when interest rates go up.`},
+{ id:541, title:"Liverpool", text:
+`Located at the heart of two world famous cities, Liverpool and London, Liverpool’s excellence in teaching, learning and research, first-class facilities / and outstanding support places the university in the top 1% of universities worldwide. The University of Liverpool will provide you with an inspiring student experience, / in a diverse international community.`},
+{ id:577, title:"Conscientiousness", text:
+`Conscientiousness is a fundamental personality trait. A conscientious person is good at self-regulation / and impulse control. This trait influences whether you will set and keep long-range goals, deliberate over choices, behave cautiously or impulsively, / and take obligations to others seriously.`},
+{ id:579, title:"Blue Whale", text:
+`Blue whales are the largest living mammals. Though reports of maximum length and weight vary from one account to another, Antarctic blue whales are known to have reached lengths / to 100 feet / and weights of over 150 tons / before stocks were severely depleted by whaling operations. North Atlantic blue whales may be expected to reach lengths / of 80–85 feet.`},
+{ id:584, title:"Canada", text:
+`With a population of only just over 30 million / living in the world's second largest country, Canada is justly renowned / for vast tracts of wilderness / untroubled by pollution either from industry / or from intensive farming methods. A major conservation issue is the battle / to stop the logging of virgin forest / in northern Ontario / and on the west coast.`},
+{ id:590, title:"Children Helping Others", text:
+`Children as young as 14 months old / will spontaneously help others / for no reward. But a study of 3-to-5-year-olds found that, although they would spontaneously draw pictures, if they were given a reward for drawing pictures, then later they wouldn’t make any drawings / unless a reward was offered.`},
+{ id:591, title:"Charlie Parker", text:
+`Charlie Parker noticed that the solos were only improvised through the melodies, but that he could also improvise them through the chords, thus creating new variations over the structure of the songs, and also playing more notes / and faster.`},
+{ id:710, title:"Antarctic", text:
+`The world's fifth largest continent: Antarctica is almost entirely covered by ice / 2000 meters thick. The area sustains varied wildlife / including seals, whales, and penguins. The Antarctic treaty signed in 1959 / and enforced since 1961 / provides for international governance of Antarctica.`},
+{ id:744, title:"Voyage", text:
+`A crew of scientists voyaged by ship / from the southern tip of Chile / into the frigid Antarctic / to search for clues to one of the great unknowns of climate change. They planned to crisscross a remote patch of sea / near the spot where, a year earlier, another crew had injected a tankful of an inert chemical / one mile below the surface.`},
+{ id:783, title:"Noise Restrictions", text:
+`The noise restrictions are based on measurements on animals in captivity / exposed to noise levels / that induce a temporary threshold shift (TTS) in hearing. The TTS onset threshold is the lowest noise exposure / capable of inducing a small temporary reduction of hearing sensitivity, also known as auditory fatigue, with full recovery shortly after exposure.`},
+{ id:787, title:"Depression Symptoms", text:
+`Symptoms of depression decrease / with improvements in sense of smell, particularly among patients with dysosmia. New research published in the journal Scientific Reports highlights the intricate relationship / between depression / and sense of smell. The study found that participants’ symptoms of depression dropped / as their odor identification improved, particularly among those with an impaired sense of smell.`},
+{ id:808, title:"Gut Microbiome", text:
+`Research has shown that the gut microbiome is important / for human physiology and health. Disturbances to the composition of the gut microbiome / can be associated with chronic diseases / such as gastrointestinal inflammatory disorders, neurological, cardiovascular / and respiratory illnesses. The human body has evolved strategies / to ensure that a symbiotic relationship exists / between the microbes in our gut / and our cells.`},
+{ id:1012, title:"Making Notes", text:
+`The whole purpose of making notes / is to aid your learning. It is important to go back over them / within a day of making them / to make sure they make sense / and make them legible for future revisions. Also, going back over them should highlight the key questions / of areas in which you want to do further reading.`},
+{ id:1022, title:"Enough Fluid", text:
+`Your body is nearly two-thirds water. And so it is really important / that you consume enough fluid / to stay hydrated / and healthy. If you don't get enough fluid you may feel tired, get headaches, and not perform at your best.`},
+{ id:1025, title:"Rates of Depression", text:
+`At a time when stress levels are soaring, rates of depression are increasing / and the gap between rich and poor is ever widening. We believe that giving can play a positive role / in helping people to feel connected to those around them / and generate a sense of purpose / and hope. When we give, we feel valued, useful / and happy.`},
+{ id:1034, title:"Bill", text:
+`The bill calls for the establishment of the National Landslide Hazards Reduction Program / within one year of becoming law. The program serves numerous functions, including to identify and understand landslide hazards and risks, reduce losses from landslides, protect communities at risk of landslides hazards, and improve communication and emergency preparedness.`},
+{ id:1228, title:"Community Gardens", text:
+`Around the world, city residents build gardens / on balconies, rooftops / and small strips of land. A March 2023 study published in the journal Ecology Letters confirms that beyond offering food / and an outlet for cultivating outdoor space, urban gardens provide benefits for the humans, insects, and animals / who inhabit these leafy respites / from city life.`},
+{ id:1289, title:"Credit Cards", text:
+`Credit Cards are a ubiquitous form of payment / that have revolutionized the way we conduct transactions. With a credit card, individuals can make purchases / without having to carry cash / or worry about the availability of funds. Credit cards also offer a range of benefits / such as cashback rewards, travel points, and purchase protection.`}
+]; // end passages
+
+/* ========== Utilities to split chunks (slash markers hidden on display) ========== */
+
+/**
+ * Build chunks from a passage of text.
+ * Rules:
+ *  - User supplied slashes (" / ") are chunk separators -> treat as chunk boundary
+ *  - Punctuation ( . , ; : ? ! — ) are chunk boundaries and the punctuation stays with the previous chunk
+ *  - Do not split on periods within proper nouns like "U.S."
+ *  - Do not show slashes when rendering
+ */
+function buildChunksFromText(text) {
+  // Unify slash markers
+  let s = text.replace(/\s*\/\s*/g, ' |SLASH| ');
+  // Protect periods in proper nouns like "U.S." by replacing them temporarily
+  s = s.replace(/U\.S\./g, 'U_S_');
+  // Insert separator after punctuation characters (keep punctuation), excluding protected periods
+  s = s.replace(/([,!?;:—])/g, '$1|PUNC|');
+  // Insert separator after sentence-ending periods, but not within numbers or abbreviations
+  s = s.replace(/(?<!\w\.\w\.)(?<!\d)\.(?!\d)/g, '.|PUNC|');
+  // Restore protected periods
+  s = s.replace(/U_S_/g, 'U.S.');
+  // Replace slash and punctuation tokens with uniform separator
+  s = s.replace(/\|SLASH\|/g, '|');
+  s = s.replace(/\|PUNC\|/g, '|');
+  // Split and clean up
+  const raw = s.split('|').map(p => p.trim()).filter(p => p.length > 0);
+  return raw;
+}
+
+/* ========== Render & UI state ========== */
+const selectQ = document.getElementById('selectQ');
+const voiceSelect = document.getElementById('voiceSelect');
+const modeToggleBtn = document.getElementById('modeToggleBtn');
+const startPauseBtn = document.getElementById('startPauseBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+const paraContent = document.getElementById('paraContent');
+const paraMeta = document.getElementById('paraMeta');
+const statusEl = document.getElementById('status');
+
+let state = {
+  idx: 0,              // selected passage index
+  chunkIndex: 0,      // current chunk index within passage
+  chunks: [],         // chunks for current passage (array of strings)
+  playing: false,
+  voices: [],
+  utterStart: 0,
+  lastUtterDuration: 0,
+  cyclePlayedCount: 0, // number of chunks played in current paragraph cycle
+  randomMode: false    // true for Random Mode, false for Custom Mode
+};
+
+// populate select
+function populateSelect(){
+  selectQ.innerHTML = '';
+  passages.forEach((p,i)=>{
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `#${p.id} ${p.title}`;
+    selectQ.appendChild(opt);
+  });
+}
+populateSelect();
+
+// load voices - filter to English-only voices
+function loadVoices(){
+  const all = window.speechSynthesis.getVoices();
+  state.voices = all.filter(v => {
+    if(!v.lang) return false;
+    try {
+      return v.lang.toLowerCase().startsWith('en');
+    } catch(e){ return false; }
+  });
+  voiceSelect.innerHTML = '';
+  if(state.voices.length === 0){
+    const opt = document.createElement('option');
+    opt.textContent = 'No English voice found';
+    voiceSelect.appendChild(opt);
+  } else {
+    state.voices.forEach((v,i)=>{
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = `${v.name} (${v.lang})`;
+      voiceSelect.appendChild(o);
+    });
+  }
+}
+window.speechSynthesis.onvoiceschanged = loadVoices;
+setTimeout(loadVoices, 600);
+
+// render a passage (full paragraph) with chunks -> each chunk will contain word spans
+function renderPassage(index){
+  state.idx = index;
+  state.chunkIndex = 0;
+  state.cyclePlayedCount = 0;
+  const p = passages[state.idx];
+  paraMeta.textContent = `#${p.id} ${p.title}`;
+  const chunks = buildChunksFromText(p.text);
+  state.chunks = chunks;
+  // build DOM
+  paraContent.innerHTML = '';
+  chunks.forEach((chunkText, ci) => {
+    // chunk container
+    const chunkEl = document.createElement('span');
+    chunkEl.className = 'chunk';
+    chunkEl.dataset.chunkIndex = ci;
+    // split into words (keep punctuation attached)
+    // We will NOT show any literal "/" because we replaced them earlier
+    const words = chunkText.split(/\s+/).filter(Boolean);
+    words.forEach((w, wi) => {
+      const wEl = document.createElement('span');
+      wEl.className = 'word default';
+      wEl.dataset.wordIndex = wi;
+      wEl.dataset.chunkIndex = ci;
+      wEl.textContent = w + (wi < words.length ? ' ' : '');
+      chunkEl.appendChild(wEl);
+    });
+    // add small separator (non-visible) to ensure spacing between chunks; do not show slash
+    paraContent.appendChild(chunkEl);
+    paraContent.appendChild(document.createTextNode(' '));
+  });
+  updateStatus('idle');
+  highlightClearAll();
+}
+
+// helper to clear all highlight classes
+function highlightClearAll(){
+  const words = document.querySelectorAll('.word');
+  words.forEach(w => {
+    w.classList.remove('colored');
+  });
+}
+
+// helper to mark a whole chunk as colored instantly
+function colorWholeChunk(ci){
+  const words = document.querySelectorAll(`.word[data-chunk-index="${ci}"]`);
+  words.forEach(w => w.classList.add('colored'));
+}
+
+// progressive color animation for a chunk (word-by-word) over given duration (ms)
+// returns a promise that resolves when animation ends
+function animateColorChunk(ci, duration){
+  return new Promise(resolve => {
+    const words = Array.from(document.querySelectorAll(`.word[data-chunk-index="${ci}"]`));
+    if(words.length === 0){ resolve(); return; }
+    // remove colors first (we animate from left to right)
+    words.forEach(w => w.classList.remove('colored'));
+    const interval = Math.max(10, Math.round(duration / words.length));
+    let i = 0;
+    const t = setInterval(() => {
+      if(i >= words.length){
+        clearInterval(t);
+        // ensure all colored
+        words.forEach(w => w.classList.add('colored'));
+        resolve();
+        return;
+      }
+      words[i].classList.add('colored');
+      i++;
+    }, interval);
+  });
+}
+
+// play exactly one chunk (chunkIndex) -> returns promise that resolves after speak+pause finished
+function playOneChunk(ci){
+  return new Promise(async (resolve, reject) => {
+    if(ci < 0 || ci >= state.chunks.length){ resolve(); return; }
+    // chunk text as displayed (we must not include slashes)
+    let chunkText = state.chunks[ci].trim();
+    if(!chunkText) { resolve(); return; }
+
+    // build utterance
+    const utter = new SpeechSynthesisUtterance(chunkText);
+    // attach selected English voice if available
+    const selVoiceIndex = Number(voiceSelect.value || 0);
+    if(state.voices && state.voices[selVoiceIndex]) utter.voice = state.voices[selVoiceIndex];
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+
+    // prepare approximate coloring during speech: use estimated word time then adjust at end
+    const words = document.querySelectorAll(`.word[data-chunk-index="${ci}"]`);
+    const wordCount = Math.max(1, words.length);
+    // conservative estimate: 180 ms per word at rate=1 -> used only to provide rough sync during speech
+    // this creates the progressive effect; we'll ensure final coloring at utter.onend
+    const estWordMs = 180 / utter.rate;
+    // start animation during speak (independent of exact end); we will cleanup afterwards
+    let animTimer = null;
+    let animIndex = 0;
+    function startEstimateAnim(){
+      // ensure words start uncolored
+      words.forEach(w => w.classList.remove('colored'));
+      animIndex = 0;
+      animTimer = setInterval(()=>{
+        if(animIndex >= words.length){ clearInterval(animTimer); animTimer = null; return; }
+        words[animIndex].classList.add('colored');
+        animIndex++;
+      }, estWordMs);
+    }
+
+    utter.onstart = (e) => {
+      state.utterStart = performance.now();
+      updateStatus(`Speaking chunk ${ci+1} / ${state.chunks.length}`);
+      // animate progressive coloring roughly while speaking
+      startEstimateAnim();
+    };
+    utter.onerror = (ev) => {
+      console.error('Speak error', ev);
+      clearInterval(animTimer);
+      // ensure chunk colored
+      colorWholeChunk(ci);
+      // fallback pause of 800ms
+      const fallbackPause = 800;
+      animateColorChunk(ci, fallbackPause).then(()=>{ resolve(); });
+    };
+    utter.onend = async (ev) => {
+      clearInterval(animTimer);
+      const utterDur = Math.max(10, performance.now() - state.utterStart);
+      state.lastUtterDuration = utterDur;
+      // ensure all chunk words colored
+      colorWholeChunk(ci);
+      // compute pause = 1.5 x utterDur
+      const pauseMs = Math.round(utterDur * 1.5);
+      // per spec: during pause, repeat the color-covering effect for this chunk (left-to-right)
+      // we'll remove the colors and re-animate over pause duration, then ensure all colored and mark played
+      // remove colors first to animate
+      const wordsArr = Array.from(document.querySelectorAll(`.word[data-chunk-index="${ci}"]`));
+      wordsArr.forEach(w => w.classList.remove('colored'));
+      await animateColorChunk(ci, pauseMs);
+      // mark as played (they are colored already)
+      // update cycle played count
+      state.cyclePlayedCount++;
+      resolve({utterDur, pauseMs});
+    };
+
+    // cancel any queued speech and speak
+    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.speak(utter);
+    } catch(e){
+      console.error('Speak exception', e);
+      // fallback: simulate durations
+      colorWholeChunk(ci);
+      await animateColorChunk(ci, 800);
+      resolve({utterDur:800, pauseMs:1200});
+    }
+  });
+}
+
+/* ========== Sequence control (play loop through chunks, infinite loop until Next/Previous) ========== */
+let loopPromise = null;
+let stopRequested = false;
+
+async function startPractice(){
+  if(state.playing) return;
+  stopRequested = false;
+  state.playing = true;
+  startPauseBtn.textContent = '|| Pause';
+  startPauseBtn.classList.add('pause');
+  startPauseBtn.disabled = false;
+  updateStatus('Playing');
+  // play current passage from chunkIndex to end; loop same passage until Next/Previous
+  while(state.playing && !stopRequested){
+    // play one chunk
+    try {
+      await playOneChunk(state.chunkIndex);
+    } catch(e){ console.error(e); }
+    if(stopRequested) break;
+    // advance chunk
+    state.chunkIndex++;
+    if(state.chunkIndex >= state.chunks.length){
+      // paragraph finished -> reset highlights and loop same passage
+      await new Promise(r => setTimeout(r,120));
+      highlightClearAll();
+      state.cyclePlayedCount = 0;
+      state.chunkIndex = 0;
+      renderPassage(state.idx); // re-render same passage
+    }
+    // small check to break if user paused
+    if(!state.playing || stopRequested) break;
+  }
+  state.playing = false;
+  startPauseBtn.textContent = '▶ Start';
+  startPauseBtn.classList.remove('pause');
+  startPauseBtn.disabled = false;
+  updateStatus('paused');
+}
+
+function pausePractice(){
+  stopRequested = true;
+  state.playing = false;
+  window.speechSynthesis.cancel();
+  startPauseBtn.textContent = '▶ Start';
+  startPauseBtn.classList.remove('pause');
+  startPauseBtn.disabled = false;
+  updateStatus('paused');
+}
+
+/* ========== Fullscreen handling ========== */
+function toggleFullscreen() {
+  const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+  if (!isFullscreen) {
+    const docElm = document.documentElement;
+    if (docElm.requestFullscreen) {
+      docElm.requestFullscreen();
+    } else if (docElm.webkitRequestFullscreen) {
+      docElm.webkitRequestFullscreen();
+    } else if (docElm.mozRequestFullScreen) {
+      docElm.mozRequestFullScreen();
+    } else if (docElm.msRequestFullscreen) {
+      docElm.msRequestFullscreen();
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    } else if (document.mozCancelFullScreen) {
+      document.mozCancelFullScreen();
+    } else if (document.msExitFullscreen) {
+      document.msExitFullscreen();
+    }
+  }
+}
+
+// Update button text based on fullscreen state
+function updateFullscreenButton() {
+  const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+  fullscreenBtn.textContent = isFullscreen ? 'Exit Full Screen' : 'Enter Full Screen';
+  document.body.classList.toggle('fullscreen', isFullscreen);
+}
+
+// Listen for fullscreen change events
+document.addEventListener('fullscreenchange', updateFullscreenButton);
+document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+document.addEventListener('mozfullscreenchange', updateFullscreenButton);
+document.addEventListener('MSFullscreenChange', updateFullscreenButton);
+
+/* ========== UI event wiring ========== */
+selectQ.addEventListener('change', (e)=>{
+  const i = Number(e.target.value);
+  renderPassage(i);
+});
+
+modeToggleBtn.addEventListener('click', ()=>{
+  state.randomMode = !state.randomMode;
+  modeToggleBtn.textContent = state.randomMode ? 'Random Mode' : 'Custom Mode';
+  selectQ.disabled = state.randomMode;
+  // if switching to Random Mode, pick a random passage
+  if(state.randomMode){
+    const r = Math.floor(Math.random() * passages.length);
+    selectQ.value = r;
+    renderPassage(r);
+  } else {
+    // load selected passage
+    renderPassage(Number(selectQ.value || 0));
+  }
+});
+
+startPauseBtn.addEventListener('click', ()=>{
+  if(state.playing){
+    pausePractice();
+  } else {
+    startPractice();
+  }
+});
+
+prevBtn.addEventListener('click', ()=>{
+  if(state.randomMode){
+    // random pick
+    const r = Math.floor(Math.random() * passages.length);
+    selectQ.value = r;
+    renderPassage(r);
+  } else {
+    const newIdx = (state.idx - 1 + passages.length) % passages.length;
+    selectQ.value = newIdx;
+    renderPassage(newIdx);
+  }
+  // stop current playback if any
+  if(state.playing){
+    pausePractice();
+  }
+});
+
+nextBtn.addEventListener('click', ()=>{
+  if(state.randomMode){
+    const r = Math.floor(Math.random() * passages.length);
+    selectQ.value = r;
+    renderPassage(r);
+  } else {
+    const newIdx = (state.idx + 1) % passages.length;
+    selectQ.value = newIdx;
+    renderPassage(newIdx);
+  }
+  // stop current playback if any
+  if(state.playing){
+    pausePractice();
+  }
+});
+
+fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+/* small helper to update status */
+function updateStatus(txt){
+  statusEl.textContent = `Status: ${txt}`;
+}
+
+/* ========== Initialization ========== */
+// default select first passage
+selectQ.value = 0;
+renderPassage(0);
+loadVoices(); // initial load attempt
+
+// update voice list again after voiceschange fired
+window.speechSynthesis.onvoiceschanged = ()=>{
+  loadVoices();
+};
+
+</script>
+</body>
+</html>
