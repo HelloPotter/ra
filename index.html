@@ -258,11 +258,49 @@ statusEl=document.getElementById('status');
 let state={idx:0,chunks:[],chunkIndex:0,playing:false,random:false,repeat:1};
 
 function buildChunks(t){
-  let s=t.replace(/\s*\/\s*/g,'|');
-  s=s.replace(/([,!?;:—])/g,'$1|');
-  s=s.replace(/(?<!\w\.\w\.)(?<!\d)\.(?!\d)/g,'.|');
-  return s.split('|').map(x=>x.trim()).filter(x=>x);
+  // 保存专用名词（如 U.S., A.B.C., U.N.E.S.C.O.）
+  const properNounMap = new Map();
+  let placeholderIndex = 0;
+  // 匹配至少两个大写字母加点的连续串，后面跟空格、标点或行尾
+  const properNounRegex = /\b(?:[A-Z]\.){2,}(?=[\s,;!?]|$)/g;
+  t = t.replace(properNounRegex, match => {
+    const placeholder = `__PROPERNOUN${placeholderIndex}__`;
+    properNounMap.set(placeholder, match);
+    placeholderIndex++;
+    return placeholder;
+  });
+
+  // 将 / 替换为分隔符
+  let s = t.replace(/\s*\/\s*/g,'|');
+
+  // 在逗号、感叹号等处插入停顿
+  s = s.replace(/([,!?;:—])/g,'$1|');
+
+  // 在句号后插入停顿，但排除占位符
+  s = s.replace(/\./g, (match, offset) => {
+    for (const [placeholder, original] of properNounMap) {
+      // 如果句号在占位符中，则跳过
+      const start = s.indexOf(placeholder);
+      const end = start + placeholder.length;
+      if (offset >= start && offset < end) return match;
+    }
+    return '.|';
+  });
+
+  // 分割成片段
+  let chunks = s.split('|').map(x=>x.trim()).filter(x=>x);
+
+  // 还原专用名词
+  chunks = chunks.map(chunk => {
+    for (const [placeholder, original] of properNounMap) {
+      chunk = chunk.replace(placeholder, original);
+    }
+    return chunk;
+  });
+
+  return chunks;
 }
+
 function renderPassage(i){
   state.idx=i;state.chunkIndex=0;
   const p=passages[i];
