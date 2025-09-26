@@ -65,8 +65,8 @@
   h1{font-size:24px;margin:0;}
   .sub{color:var(--muted);font-size:14px;text-align:center;margin-top:8px;}
   .controls, .panel{background:var(--panel);border-radius:12px;padding:16px;box-shadow:0 8px 22px rgba(12,18,26,0.06);}
-  .top-row{display:flex;gap:16px;align-items:center;justify-content:center;}
-  select{font-size:14px;}
+  .top-row{display:flex;gap:12px;align-items:center;justify-content:center;}
+  select{font-size:14px;width:100%;min-width:300px;padding:8px;border-radius:8px;border:1px solid #e6e9ef;}
   .right-actions{margin-left:auto;display:flex;gap:12px;align-items:center;}
   .main{display:flex;gap:16px;margin-top:20px;justify-content:center;}
   .left{flex:1;}
@@ -76,7 +76,7 @@
   .word.default { color: #111; }
   .word.colored { color: var(--highlight); }
   .chunk[data-state="current"] { }
-  .buttons {display:flex;gap:12px;align-items:center;justify-content:center;margin-top:16px;}
+  .buttons {display:flex;gap:10px;align-items:center;justify-content:center;margin-top:16px;}
   button.primary {
     background:var(--accent);
     color:#fff;
@@ -87,6 +87,8 @@
     cursor:pointer;
     transition:transform .12s ease, background .12s ease, box-shadow .12s ease;
     box-shadow: 0 6px 14px rgba(31,111,235,0.14);
+    min-width:120px;
+    text-align:center;
   }
   button.primary:hover {
     transform:translateY(-3px);
@@ -109,20 +111,23 @@
     font-size:15px;
     cursor:pointer;
     transition:transform .12s ease, background .12s ease, box-shadow .12s ease;
+    min-width:120px;
+    text-align:center;
   }
   button.secondary:hover {
     transform:translateY(-2px);
     box-shadow: 0 6px 12px rgba(2,6,23,0.06);
   }
   .small{font-size:14px;color:var(--muted);}
-  .voiceselect{width:100%;max-width:200px;}
   .status{font-size:14px;color:var(--muted);margin-top:12px;text-align:center;}
   footer{margin-top:24px;font-size:14px;color:var(--muted);text-align:center;}
   /* Fullscreen styles */
-  .fullscreen .wrap { max-width: 100%; margin: 0; padding: 32px; }
+  .fullscreen .wrap { max-width: 100%; margin: 0; padding: 16px; height: 100vh; display: flex; flex-direction: column; justify-content: center; }
   @media (max-width:980px){
     .main{flex-direction:column;}
     .text-panel{font-size:20px;min-height:200px;}
+    .wrap{padding:16px;}
+    .fullscreen .wrap{padding:8px;}
   }
 </style>
 </head>
@@ -136,14 +141,14 @@
   </header>
 
   <div class="controls top-row">
-    <div style="display:flex;align-items:center;gap:16px;">
+    <div style="display:flex;align-items:center;gap:12px;">
       <label style="display:flex;flex-direction:column;">
         <span class="small">Select question (disabled in Random)</span>
-        <select id="selectQ" style="min-width:420px;padding:8px;border-radius:8px;border:1px solid #e6e9ef;"></select>
+        <select id="selectQ"></select>
       </label>
       <label style="display:flex;flex-direction:column;">
         <span class="small">Voice</span>
-        <select id="voiceSelect" class="voiceselect" style="padding:8px;border-radius:8px;border:1px solid #e6e9ef;"></select>
+        <select id="voiceSelect"></select>
       </label>
     </div>
     <div class="right-actions">
@@ -322,20 +327,23 @@ function populateSelect(){
 }
 populateSelect();
 
-// load voices - filter to English-only voices
+// load voices - filter to Google-specific voices only
 function loadVoices(){
   const all = window.speechSynthesis.getVoices();
   state.voices = all.filter(v => {
-    if(!v.lang) return false;
+    if(!v.name || !v.lang) return false;
     try {
-      return v.lang.toLowerCase().startsWith('en');
+      const isGoogleVoice = v.name.includes('Google');
+      const isSupportedLang = v.lang === 'en-US' || v.lang === 'en-GB';
+      return isGoogleVoice && isSupportedLang;
     } catch(e){ return false; }
   });
   voiceSelect.innerHTML = '';
   if(state.voices.length === 0){
     const opt = document.createElement('option');
-    opt.textContent = 'No English voice found';
+    opt.textContent = 'No Google voices found. Please use Chrome or check device settings.';
     voiceSelect.appendChild(opt);
+    updateStatus('No Google voices available');
   } else {
     state.voices.forEach((v,i)=>{
       const o = document.createElement('option');
@@ -431,9 +439,13 @@ function playOneChunk(ci){
 
     // build utterance
     const utter = new SpeechSynthesisUtterance(chunkText);
-    // attach selected English voice if available
+    // attach selected Google voice if available
     const selVoiceIndex = Number(voiceSelect.value || 0);
-    if(state.voices && state.voices[selVoiceIndex]) utter.voice = state.voices[selVoiceIndex];
+    if(state.voices && state.voices[selVoiceIndex]) {
+      utter.voice = state.voices[selVoiceIndex];
+    } else {
+      updateStatus('No Google voice selected. Please choose a voice.');
+    }
     utter.rate = 1.0;
     utter.pitch = 1.0;
 
@@ -441,7 +453,6 @@ function playOneChunk(ci){
     const words = document.querySelectorAll(`.word[data-chunk-index="${ci}"]`);
     const wordCount = Math.max(1, words.length);
     // conservative estimate: 180 ms per word at rate=1 -> used only to provide rough sync during speech
-    // this creates the progressive effect; we'll ensure final coloring at utter.onend
     const estWordMs = 180 / utter.rate;
     // start animation during speak (independent of exact end); we will cleanup afterwards
     let animTimer = null;
@@ -471,6 +482,7 @@ function playOneChunk(ci){
       // fallback pause of 800ms
       const fallbackPause = 800;
       animateColorChunk(ci, fallbackPause).then(()=>{ resolve(); });
+      updateStatus('Speech error. Please check browser or voice settings.');
     };
     utter.onend = async (ev) => {
       clearInterval(animTimer);
@@ -481,13 +493,10 @@ function playOneChunk(ci){
       // compute pause = 1.5 x utterDur
       const pauseMs = Math.round(utterDur * 1.5);
       // per spec: during pause, repeat the color-covering effect for this chunk (left-to-right)
-      // we'll remove the colors and re-animate over pause duration, then ensure all colored and mark played
-      // remove colors first to animate
       const wordsArr = Array.from(document.querySelectorAll(`.word[data-chunk-index="${ci}"]`));
       wordsArr.forEach(w => w.classList.remove('colored'));
       await animateColorChunk(ci, pauseMs);
       // mark as played (they are colored already)
-      // update cycle played count
       state.cyclePlayedCount++;
       resolve({utterDur, pauseMs});
     };
@@ -502,6 +511,7 @@ function playOneChunk(ci){
       colorWholeChunk(ci);
       await animateColorChunk(ci, 800);
       resolve({utterDur:800, pauseMs:1200});
+      updateStatus('Speech failed. Please ensure Google voices are available.');
     }
   });
 }
@@ -558,27 +568,32 @@ function pausePractice(){
 /* ========== Fullscreen handling ========== */
 function toggleFullscreen() {
   const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
-  if (!isFullscreen) {
-    const docElm = document.documentElement;
-    if (docElm.requestFullscreen) {
-      docElm.requestFullscreen();
-    } else if (docElm.webkitRequestFullscreen) {
-      docElm.webkitRequestFullscreen();
-    } else if (docElm.mozRequestFullScreen) {
-      docElm.mozRequestFullScreen();
-    } else if (docElm.msRequestFullscreen) {
-      docElm.msRequestFullscreen();
+  try {
+    if (!isFullscreen) {
+      const docElm = document.documentElement;
+      if (docElm.requestFullscreen) {
+        docElm.requestFullscreen();
+      } else if (docElm.webkitRequestFullscreen) {
+        docElm.webkitRequestFullscreen();
+      } else if (docElm.mozRequestFullScreen) {
+        docElm.mozRequestFullScreen();
+      } else if (docElm.msRequestFullscreen) {
+        docElm.msRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
     }
-  } else {
-    if (document.exitFullscreen) {
-      document.exitFullscreen();
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen();
-    } else if (document.mozCancelFullScreen) {
-      document.mozCancelFullScreen();
-    } else if (document.msExitFullscreen) {
-      document.msExitFullscreen();
-    }
+  } catch (e) {
+    console.error('Fullscreen error:', e);
+    updateStatus('Fullscreen not supported. Try another browser or device.');
   }
 }
 
