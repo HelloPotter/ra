@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>PTE Speaking Practice — PSP 1.95</title>
+<title>PTE Speaking Practice — PSP 1.96</title>
 
 <!-- ResponsiveVoice TTS -->
 <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
@@ -85,9 +85,14 @@ h1{margin:0;font-size:32px;}
 /* Word wrapper prevents breaking inside the word (keeps characters together) */
 .word { display:inline-block; white-space:nowrap; }
 
-/* Character spans inside a word - animate color per character */
-.char { display:inline-block; transition: color 0.04s linear; color:#111; }
-.char.colored { color: var(--highlight); }
+/* 字符级高亮：使用 inline（而非 inline-block）避免字符间被浏览器当成换行点 */
+.char{
+  display:inline;                   /* 关键：inline 可避免单词中间换行 */
+  white-space:pre;                   /* 保留空格/空白的显示一致性（但空格仍需由 text nodes 提供） */
+  transition: color 0.04s linear;
+  color:#111;
+}
+.char.colored{ color: var(--highlight); }
 
 /* Buttons below */
 .controls-row { display:flex; gap:10px; justify-content:center; margin-bottom:10px; }
@@ -176,7 +181,7 @@ button.big.secondary { background:#fff; border:1px solid #d7dbe4; color:#0b1220;
 
   <div id="status" style="text-align:center;color:var(--muted);font-size:14px;margin-bottom:8px;">Status: idle</div>
 
-  <div class="footer">PTE Speaking Practice — © 2025 Stone Zhao</div>
+  <div class="footer">PTE Speaking Practice 1.96 — © 2025 Stone Zhao</div>
 </div>
 
 <script>
@@ -423,47 +428,53 @@ function renderPassage(section, index) {
   state.idx = index;
   state.chunkIndex = 0;
   state.cyclePlayedCount = 0;
+
   const p = (section === 'RA') ? raPassages[index] : rsPassages[index];
   if (!p) {
     paraMeta.textContent = 'No passage';
     paraContent.innerHTML = '';
     return;
   }
+
   paraMeta.textContent = `#${p.id} ${p.title}`;
-  const chunks = buildChunksFromText(p.text);
+
+  // RA 分意群；RS 整句一次性读
+  let chunks;
+  if (section === 'RA') {
+    chunks = buildChunksFromText(p.text);
+  } else {
+    const whole = p.text.replace(/\s*\/\s*/g, ' ').trim();
+    chunks = [whole];
+  }
   state.chunks = chunks;
 
+  // 重新渲染：保留空格字符
   paraContent.innerHTML = '';
   chunks.forEach((chunkText, ci) => {
     const chunkEl = document.createElement('span');
     chunkEl.dataset.ci = ci;
-    // split into words keeping punctuation attached to previous word (normal split on whitespace)
-    const words = chunkText.split(/\s+/).filter(Boolean);
-    words.forEach((w) => {
-      const wordWrap = document.createElement('span');
-      wordWrap.className = 'word';
-      // create char spans inside word
-      for (let i = 0; i < w.length; i++) {
-        const ch = w[i];
+    for (let i = 0; i < chunkText.length; i++) {
+      const ch = chunkText[i];
+      if (ch === ' ') {
+        // 直接添加真实空格
+        chunkEl.appendChild(document.createTextNode(' '));
+      } else {
         const chEl = document.createElement('span');
         chEl.className = 'char';
         chEl.dataset.ci = ci;
         chEl.dataset.charIndex = i;
         chEl.textContent = ch;
-        wordWrap.appendChild(chEl);
+        chunkEl.appendChild(chEl);
       }
-      // append a space after each word (space outside .word allows normal wrapping between words)
-      chunkEl.appendChild(wordWrap);
-      chunkEl.appendChild(document.createTextNode(' '));
-    });
+    }
     paraContent.appendChild(chunkEl);
-    // small gap between chunks
-    paraContent.appendChild(document.createTextNode(' '));
+    paraContent.appendChild(document.createTextNode(' ')); // 保持段落间距
   });
 
   highlightClearAll();
   updateStatus('idle');
 }
+
 
 /* helpers */
 function highlightClearAll() {
