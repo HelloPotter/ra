@@ -206,7 +206,7 @@ const raPassages = [
   { id:117, title:"Rural Population", text:
   `Thus, a country might possess a sizeable rural population, but have an economic system / in which the interests of the voters were predominantly related to their incomes, not to their occupations or location; and in such a country the political system would be unlikely / to include an important agrarian party.`},
   { id:136, title:"Productive Capacity", text:
-  `The core of the problem was the immense disparity / between the country’s productive capacity / and the ability of people to consume. Great innovations in productive techniques during and after the war raised the output of industry / beyond the purchasing capacity of U. S. farmers / and wage earners.`},
+  `The core of the problem was the immense disparity / between the country’s productive capacity / and the ability of people to consume. Great innovations in productive techniques during and after the war raised the output of industry / beyond the purchasing capacity of U.S. farmers / and wage earners.`},
   { id:145, title:"Population Growth", text:
   `How quickly is the world's population growing? In the United States and other developed countries, the current growth rate is very low. In most developing countries, the human population is growing at a rate / of nearly 3 people per second. Because of this bustling growth rate, the human population is well on its way / to reaching 9 billion within lifetime.`},
   { id:250, title:"Girls v.s. Boys", text:
@@ -410,13 +410,33 @@ let state = {
      breaking inside words while allowing per-character coloring.
 */
 function buildChunksFromText(text) {
-  // protect U.S. or U. S. patterns
-  let s = text.replace(/\s*\/\s*/g, ' |SLASH| ');
-  s = s.replace(/U\.S\./g, 'U_S_'); // protect
-  // punctuation separators
+  // 暂时保护不应被分开的特殊结构
+  let s = text
+    .replace(/U\.S\./g, 'U_S_')          // U.S.
+    .replace(/U\.K\./g, 'U_K_')          // U.K.
+    .replace(/Mr\./g, 'Mr_')             // Mr.
+    .replace(/Mrs\./g, 'Mrs_')           // Mrs.
+    .replace(/Dr\./g, 'Dr_')             // Dr.
+    .replace(/(\d):(\d{2})/g, '$1_COLON_$2') // 5:30 → 5_COLON_30
+    .replace(/(\d)\.(\d)/g, '$1_DOT_$2');    // 3.14 → 3_DOT_14
+
+  // 正常的分句符
+  s = s.replace(/\s*\/\s*/g, ' |SLASH| ');
   s = s.replace(/([,!?;:—])/g, '$1|PUNC|');
+  // 分句句号：忽略数字或缩写类情况
   s = s.replace(/(?<!\w\.\w\.)(?<!\d)\.(?!\d)/g, '.|PUNC|');
-  s = s.replace(/U_S_/g, 'U.S.'); // restore in text
+
+  // 恢复保护
+  s = s
+    .replace(/U_S_/g, 'U.S.')
+    .replace(/U_K_/g, 'U.K.')
+    .replace(/Mr_/g, 'Mr.')
+    .replace(/Mrs_/g, 'Mrs.')
+    .replace(/Dr_/g, 'Dr.')
+    .replace(/_COLON_/g, ':')
+    .replace(/_DOT_/g, '.');
+
+  // 清理并分块
   s = s.replace(/\|SLASH\|/g, '|');
   s = s.replace(/\|PUNC\|/g, '|');
   const arr = s.split('|').map(p => p.trim()).filter(Boolean);
