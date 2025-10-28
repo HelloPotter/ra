@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>PTE Speaking Practice — PSP 1.96</title>
+<title>PTE Speaking Practice — PSP 1.97</title>
 
 <!-- ResponsiveVoice TTS -->
 <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
@@ -20,7 +20,7 @@
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);font-family:Inter, "Segoe UI", Roboto, Arial, sans-serif;color:#0b1220;}
-.wrap{max-width:920px;margin:20px auto;padding:18px;}
+.wrap{max-width:1000px;margin:20px auto;padding:18px;}
 header{text-align:center;margin-bottom:12px;}
 h1{margin:0;font-size:32px;}
 .sub{color:var(--muted);margin-top:6px;font-size:14px;}
@@ -59,9 +59,10 @@ h1{margin:0;font-size:32px;}
 .primary-btn { background:var(--accent); color:#fff; }
 
 /* Fixed widths (Question flexible) */
-.ctrl.section { width:125px; flex:0 0 125px; }
+.ctrl.section { width:130px; flex:0 0 130px; }
 .ctrl.question{ flex:1 1 auto; min-width:220px; } /* Question is flexible */
 .ctrl.voice { width:140px; flex:0 0 140px; }
+.ctrl.speed { width:50px; flex:0 0 50px; } /* 新增语速控件宽度 */
 .ctrl.repeat { width:50px; flex:0 0 50px; } /* a little wider for number input + arrows */
 .ctrl.mode { width:110px; flex:0 0 110px; }
 .ctrl.view { width:140px; flex:0 0 140px; }
@@ -150,6 +151,17 @@ button.big.secondary { background:#fff; border:1px solid #d7dbe4; color:#0b1220;
       </select>
     </div>
 
+    <!-- 新增 Speed 控件 -->
+    <div class="ctrl speed">
+      <label for="speedSelect">Speed</label>
+      <select id="speedSelect" aria-label="Speed select">
+        <option value="0.7">0.7x</option>
+        <option value="0.8">0.8x</option>
+        <option value="0.9" selected >0.9x</option>
+        <option value="1.0">1.0x</option>
+      </select>
+    </div>
+
     <div class="ctrl repeat">
       <label for="repeatInput">Repeat</label>
       <input id="repeatInput" type="number" min="1" max="10" value="5" aria-label="Repeat times">
@@ -181,7 +193,7 @@ button.big.secondary { background:#fff; border:1px solid #d7dbe4; color:#0b1220;
 
   <div id="status" style="text-align:center;color:var(--muted);font-size:14px;margin-bottom:8px;">Status: idle</div>
 
-  <div class="footer">PTE Speaking Practice 1.96 — © 2025 Stone Zhao</div>
+  <div class="footer">PTE Speaking Practice 1.97 — © 2025 Stone Zhao</div>
 </div>
 
 <script>
@@ -330,7 +342,7 @@ const rsPassages = [
 {"id": 56, "title": "Recruiting best students", "text": "We are committed to recruiting the best students regardless of their financial situation."},
 {"id": 57, "title": "Attracting best students", "text": "We are committed to attracting the best students regardless of their financial circumstances."},
 {"id": 58, "title": "Attract very good", "text": "We want to attract very good students regardless of their financial circumstances."},
-{"id": 59, "title":"Son has cold","text":"Your son has a bad cold and is in the nurse's room."},
+{"id": 59,"title":"Son has cold","text":"Your son has a bad cold and is in the nurse's room."},
 {"id":60,"title":"Bus arrive soon","text":"The bus for the airport will arrive soon."},
 {"id":61,"title":"Bus will be there","text":"The bus for the airport will be there soon."},
 {"id":62,"title":"Bring keys","text":"Always bring keys with you because the front door closes automatically."},
@@ -380,6 +392,7 @@ const rsPassages = [
 const selectSection = document.getElementById('selectSection');
 const selectQ = document.getElementById('selectQ');
 const voiceSelect = document.getElementById('voiceSelect');
+const speedSelect = document.getElementById('speedSelect'); // 新增
 const repeatInput = document.getElementById('repeatInput');
 const modeBtn = document.getElementById('modeBtn');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -578,7 +591,7 @@ function playOneChunk(ci) {
       startProgressiveDuringSpeak(estUtterDur);
 
       responsiveVoice.speak(chunkText, voiceName, {
-        rate: 1.0,
+        rate: speechRate,
         onstart: function() {
           // refine start time
           utterStart = performance.now();
@@ -816,6 +829,14 @@ document.addEventListener('fullscreenchange', () => { fullscreenBtn.textContent 
 
 /* ========== utilities ========== */
 function updateStatus(txt) { statusEl.textContent = `Status: ${txt}`; }
+
+/* ========== speech speed handling ========== */
+/* default speechRate is controlled by speedSelect; update dynamically */
+let speechRate = parseFloat(speedSelect.value) || 1.0;
+speedSelect.addEventListener('change', () => {
+  const v = parseFloat(speedSelect.value);
+  if (!isNaN(v) && v > 0) speechRate = v;
+});
 
 /* ========== init ========== */
 (function init() {
