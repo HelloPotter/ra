@@ -564,7 +564,7 @@ function playOneChunk(ci) {
 
     // estimate utterance duration: 200ms per word
     const wordCount = Math.max(1, chunkText.split(/\s+/).filter(Boolean).length);
-    let estUtterDur = Math.max(160, Math.round(wordCount * 200));
+    let estUtterDur = Math.max(160, Math.round((wordCount * 200) / (speechRate || 1)));
 
     // during speak: approximate progressive highlight using estimate
     let animTimer = null;
