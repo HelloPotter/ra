@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>PTE Speaking Practice — PSP 1.97</title>
+<title>PTE Speaking Practice — PSP 1.98</title>
 
 <!-- ResponsiveVoice TTS -->
 <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
@@ -63,7 +63,7 @@ h1{margin:0;font-size:32px;}
 .ctrl.question{ flex:1 1 auto; min-width:220px; } /* Question is flexible */
 .ctrl.voice { width:140px; flex:0 0 140px; }
 .ctrl.speed { width:50px; flex:0 0 50px; } /* 新增语速控件宽度 */
-.ctrl.repeat { width:50px; flex:0 0 50px; } /* a little wider for number input + arrows */
+.ctrl.repeat { width:40px; flex:0 0 40px; } /* a little wider for number input + arrows */
 .ctrl.mode { width:110px; flex:0 0 110px; }
 .ctrl.view { width:140px; flex:0 0 140px; }
 
@@ -163,8 +163,20 @@ button.big.secondary { background:#fff; border:1px solid #d7dbe4; color:#0b1220;
     </div>
 
     <div class="ctrl repeat">
-      <label for="repeatInput">Repeat</label>
-      <input id="repeatInput" type="number" min="1" max="10" value="5" aria-label="Repeat times">
+      <label for="repeatSelect">Repeat</label>
+      <!-- 替换：把原来的 input[type=number] 换成 select，视觉与 speed 一致 -->
+      <select id="repeatSelect" aria-label="Repeat times">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5" selected>5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+        <option value="10">10</option>
+      </select>
     </div>
 
     <div class="ctrl mode">
@@ -193,7 +205,7 @@ button.big.secondary { background:#fff; border:1px solid #d7dbe4; color:#0b1220;
 
   <div id="status" style="text-align:center;color:var(--muted);font-size:14px;margin-bottom:8px;">Status: idle</div>
 
-  <div class="footer">PTE Speaking Practice 1.97 — © 2025 Stone Zhao</div>
+  <div class="footer">PTE Speaking Practice 1.98 — © 2025 Stone Zhao</div>
 </div>
 
 <script>
@@ -342,7 +354,7 @@ const rsPassages = [
 {"id": 56, "title": "Recruiting best students", "text": "We are committed to recruiting the best students regardless of their financial situation."},
 {"id": 57, "title": "Attracting best students", "text": "We are committed to attracting the best students regardless of their financial circumstances."},
 {"id": 58, "title": "Attract very good", "text": "We want to attract very good students regardless of their financial circumstances."},
-{"id": 59,"title":"Son has cold","text":"Your son has a bad cold and is in the nurse's room."},
+{"id":59,"title":"Son has cold","text":"Your son has a bad cold and is in the nurse's room."},
 {"id":60,"title":"Bus arrive soon","text":"The bus for the airport will arrive soon."},
 {"id":61,"title":"Bus will be there","text":"The bus for the airport will be there soon."},
 {"id":62,"title":"Bring keys","text":"Always bring keys with you because the front door closes automatically."},
@@ -393,7 +405,7 @@ const selectSection = document.getElementById('selectSection');
 const selectQ = document.getElementById('selectQ');
 const voiceSelect = document.getElementById('voiceSelect');
 const speedSelect = document.getElementById('speedSelect'); // 新增
-const repeatInput = document.getElementById('repeatInput');
+const repeatSelect = document.getElementById('repeatSelect'); // <-- 改为 select 形式
 const modeBtn = document.getElementById('modeBtn');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
 const prevBtn = document.getElementById('prevBtn');
@@ -642,7 +654,8 @@ async function startPractice() {
   state.playing = true;
   startBtn.textContent = '|| Pause';
   updateStatus('Playing');
-  state.repeatTimes = Math.min(10, Math.max(1, parseInt(repeatInput.value || '1')));
+  // 使用 repeatSelect 值（已替换）
+  state.repeatTimes = Math.min(10, Math.max(1, parseInt(repeatSelect.value || '1')));
 
   // RS: repeat whole sentence (i.e. all chunks in order) repeatTimes times,
   // then auto-advance to next question and auto-start that question.
@@ -811,7 +824,8 @@ startBtn.addEventListener('click', () => {
   if (state.playing) {
     pausePractice();
   } else {
-    state.repeatTimes = Math.min(10, Math.max(1, Number(document.getElementById('repeatInput').value) || 1));
+    // 使用 repeatSelect 的值
+    state.repeatTimes = Math.min(10, Math.max(1, Number(document.getElementById('repeatSelect').value) || 1));
     state.stopRequested = false;
     const sec = selectSection.value;
     const arr = (sec === 'RA') ? raPassages : rsPassages;
